@@ -1,0 +1,6 @@
+{
+  "name": "G.H. Raisoni Admission Management",
+  "description": "G.H. Raisoni Admission Management MVP for IL and A-CAP branch allocation and vacancy tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
