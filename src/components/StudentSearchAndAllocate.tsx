@@ -54,7 +54,7 @@ export const StudentSearchAndAllocate: React.FC<StudentSearchAndAllocateProps> =
 
   // Filter students by Application ID, Candidate Name, or Merit Number
   const searchResults = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = searchQuery.trim().toLowerCase().replace(/^#/, '');
     if (!q) return [];
     return students
       .filter((s) => {
@@ -63,7 +63,7 @@ export const StudentSearchAndAllocate: React.FC<StudentSearchAndAllocateProps> =
         const matchMerit = String(s.merit_number).toLowerCase().includes(q);
         return matchAppId || matchName || matchMerit;
       })
-      .slice(0, 10);
+      .slice(0, 15);
   }, [students, searchQuery]);
 
   const handleAllocate = async (isReassign = false) => {
@@ -288,6 +288,40 @@ export const StudentSearchAndAllocate: React.FC<StudentSearchAndAllocateProps> =
                 Unallocated
               </span>
             )}
+          </div>
+
+          {/* Database raw_data & Source Records */}
+          <div className="bg-white rounded-lg p-2.5 border border-slate-200 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-1">
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <span>Database raw_data Record</span>
+              </span>
+              <div className="flex flex-wrap items-center gap-1 font-mono text-[10px]">
+                {selectedStudent.raw_data?.source_sheet && (
+                  <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                    Sheet: {String(selectedStudent.raw_data.source_sheet)}
+                  </span>
+                )}
+                {selectedStudent.raw_data?.source_row && (
+                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                    Row: {String(selectedStudent.raw_data.source_row)}
+                  </span>
+                )}
+                {selectedStudent.raw_data?.sr_no && (
+                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                    Sr #{String(selectedStudent.raw_data.sr_no)}
+                  </span>
+                )}
+              </div>
+            </div>
+            <details className="mt-1 text-[11px] group">
+              <summary className="cursor-pointer text-blue-600 hover:text-blue-800 font-semibold select-none flex items-center gap-1">
+                <span>Inspect Stored JSON Fields ({Object.keys(selectedStudent.raw_data || {}).length} attributes)</span>
+              </summary>
+              <pre className="mt-1.5 p-2 bg-slate-50 border border-slate-200 rounded text-[10px] font-mono text-slate-800 overflow-x-auto max-h-36">
+                {JSON.stringify(selectedStudent.raw_data || {}, null, 2)}
+              </pre>
+            </details>
           </div>
 
           {/* Allocation Controls */}

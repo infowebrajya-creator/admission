@@ -18,7 +18,12 @@ export default function App() {
   const getInitialRoute = (): 'admin' | 'display' => {
     const path = window.location.pathname.toLowerCase();
     const hash = window.location.hash.toLowerCase();
-    if (path.includes('display') || hash.includes('display')) {
+    const search = window.location.search.toLowerCase();
+    if (
+      path.includes('display') ||
+      hash.includes('display') ||
+      search.includes('display')
+    ) {
       return 'display';
     }
     return 'admin';
@@ -51,17 +56,25 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Maintain ref to selectedStudent to keep reloadData callback stable
+  const selectedStudentRef = React.useRef<Student | null>(null);
+  selectedStudentRef.current = selectedStudent;
+
   // Authoritative single refresh function (Requirement 19)
   const reloadData = useCallback(async () => {
     try {
       const data = await refreshAdmissionData();
+      const ilCount = data.students.filter((s) => s.current_processing_mode === 'IL').length;
+      const acapCount = data.students.filter((s) => s.current_processing_mode === 'A-CAP').length;
+      console.log(
+        `[Admin Load] setStudentRegistry: ${data.students.length} students loaded into state. ALL = ${data.students.length}, IL = ${ilCount}, A-CAP = ${acapCount}`
+      );
       setStudents(data.students);
       setCapacities(data.capacities);
       setDbError(null);
-      if (selectedStudent) {
-        const updated = data.students.find(
-          (s) => s.application_id === selectedStudent.application_id
-        );
+      if (selectedStudentRef.current) {
+        const currId = selectedStudentRef.current.application_id;
+        const updated = data.students.find((s) => s.application_id === currId);
         setSelectedStudent(updated || null);
       }
     } catch (err) {
@@ -70,7 +83,7 @@ export default function App() {
     } finally {
       setIsInitialLoading(false);
     }
-  }, [selectedStudent]);
+  }, []);
 
   // Initial mount authoritative fetch
   useEffect(() => {

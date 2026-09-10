@@ -9,11 +9,13 @@ import {
   Maximize2,
   Minimize2,
   Layers,
+  ExternalLink,
 } from 'lucide-react';
 import { BRANCH_CODES, DEFAULT_EMPTY_CAPACITIES } from '../constants';
 import { BranchCode, VacancySummary } from '../types';
 import { subscribeSupabaseRealtime } from '../services/supabase';
 import { calculateVacancies, refreshAdmissionData } from '../services/admissionStore';
+import { openOrFocusDisplayWindow } from '../utils/displayWindow';
 
 interface PublicDisplayProps {
   summary?: VacancySummary;
@@ -54,7 +56,10 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({
 
   const isSeparateDisplayWindow =
     typeof window !== 'undefined' &&
-    (window.name === 'gh-raisoni-admission-display' || !!window.opener);
+    (window.name === 'gh-raisoni-admission-display' ||
+      window.location.search.includes('standalone') ||
+      window.location.hash.includes('standalone') ||
+      !!window.opener);
 
   // Sync if parent passes updated summary
   useEffect(() => {
@@ -120,8 +125,11 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({
 
     // 5. Window message listener (for postMessage from opener/reuse)
     const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type === 'DISPLAY_REFRESH') {
+      if (
+        !event.data ||
+        event.data.type === 'DISPLAY_REFRESH' ||
+        event.data.type === 'DATA_UPDATED'
+      ) {
         refreshDisplayData();
       }
     };
@@ -132,10 +140,10 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({
       refreshDisplayData();
     });
 
-    // 7. Safety polling interval (every 3 seconds for reliable projector/TV display)
+    // 7. Safety polling interval (every 2.5 seconds for reliable projector/TV display)
     const intervalId = setInterval(() => {
       refreshDisplayData();
-    }, 3000);
+    }, 2500);
 
     // 8. Complete cleanup on unmount
     return () => {
@@ -323,15 +331,15 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({
                   </button>
                   <button
                     id="nav-to-display-btn"
-                    onClick={() => onNavigate('display')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-bold transition-all ${
-                      currentRoute === 'display'
-                        ? 'bg-orange-600 text-white shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                    onClick={() => {
+                      openOrFocusDisplayWindow();
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white shadow-xs transition-all cursor-pointer ring-1 ring-orange-500"
+                    title="Open Live Admission Display Board in another window (Projector / TV Screen)"
                   >
-                    <Monitor className="w-3 h-3" />
-                    <span>/display</span>
+                    <Monitor className="w-3.5 h-3.5" />
+                    <span>Open in New Window</span>
+                    <ExternalLink className="w-3 h-3 ml-0.5 opacity-90" />
                   </button>
                 </div>
               )}

@@ -45,35 +45,58 @@ export function getSupabase(): SupabaseClient | null {
  */
 export function mapDbRowToStudent(row: Record<string, unknown>): Student {
   const raw = (row.raw_data as Record<string, unknown>) || {};
-  const appId = String(row.application_id || row.id || '').trim().toUpperCase();
+  const appId = String(row.application_id || raw.application_id || row.id || '').trim().toUpperCase();
   const meritNum =
-    (row.merit_no as string | number) ||
-    (raw.merit_number as string | number) ||
+    (row.merit_no as string | number) ??
+    (raw.merit_number as string | number) ??
+    (raw.merit_no as string | number) ??
     '';
 
-  const pcm = String(raw.pcm_percentile ?? row.pcm_percentile ?? '0.00');
-  const jee = String(raw.jee_percentile ?? row.jee_percentile ?? '0.00');
-  const hsc = String(raw.hsc_percentage ?? row.hsc_percentage ?? '0.00');
-  const ssc = String(raw.ssc_percentage ?? row.ssc_percentage ?? '0.00');
+  const pcmRaw =
+    raw.pcm_cet_total_percentile ??
+    raw.pcm_percentile ??
+    raw.pcm ??
+    row.pcm_percentile;
+  const pcm = pcmRaw !== undefined && pcmRaw !== null && pcmRaw !== '' ? String(pcmRaw) : '—';
+
+  const jeeRaw =
+    raw.jee_total_percentile ??
+    raw.jee_percentile ??
+    raw.jee ??
+    row.jee_percentile;
+  const jee = jeeRaw !== undefined && jeeRaw !== null && jeeRaw !== '' ? String(jeeRaw) : '—';
+
+  const hscRaw =
+    raw.hsc_total_percentage ??
+    raw.hsc_percentage ??
+    raw.hsc ??
+    row.hsc_percentage;
+  const hsc = hscRaw !== undefined && hscRaw !== null && hscRaw !== '' ? String(hscRaw) : '—';
+
+  const sscRaw =
+    raw.ssc_total_percentage ??
+    raw.ssc_percentage ??
+    raw.ssc ??
+    row.ssc_percentage;
+  const ssc = sscRaw !== undefined && sscRaw !== null && sscRaw !== '' ? String(sscRaw) : '—';
+
   const signature = String(raw.signature ?? row.signature ?? 'Verified');
 
-  let origMerit: MeritSelection = (raw.original_merit_selection as MeritSelection) || 'A-CAP ONLY';
-  let procMode: ProcessingMode = (raw.current_processing_mode as ProcessingMode) || 'A-CAP';
+  // Derive classification authoritatively from public.students row columns
+  const origMerit: MeritSelection =
+    (row.original_merit_selection as MeritSelection) ||
+    (raw.original_merit_selection as MeritSelection) ||
+    (row.allocated_quota === 'A-CAP' ? 'A-CAP ONLY' : 'IL ONLY');
 
-  if (!raw.original_merit_selection) {
-    if (row.allocated_quota === 'IL') {
-      origMerit = 'IL ONLY';
-      procMode = 'IL';
-    } else if (row.allocated_quota === 'A-CAP') {
-      origMerit = 'A-CAP ONLY';
-      procMode = 'A-CAP';
-    }
-  }
+  const procMode: ProcessingMode =
+    (row.current_processing_mode as ProcessingMode) ||
+    (raw.current_processing_mode as ProcessingMode) ||
+    (origMerit.includes('IL') ? 'IL' : 'A-CAP');
 
   return {
     id: appId,
     application_id: appId,
-    candidate_name: String(row.candidate_name || row.name || `Candidate ${appId}`),
+    candidate_name: String(row.candidate_name || raw.candidate_name || row.name || `Candidate ${appId}`),
     merit_number: meritNum,
     pcm_percentile: pcm,
     jee_percentile: jee,
@@ -86,8 +109,8 @@ export function mapDbRowToStudent(row: Record<string, unknown>): Student {
     allocated_quota: (row.allocated_quota as ProcessingMode) || null,
     allocated_at: (row.allocated_at as string) || null,
     status: (row.status as string) || (row.allocated_branch_id ? 'Admitted' : 'Pending'),
-    gender: (row.gender as string) || null,
-    category: (row.category as string) || null,
+    gender: (row.gender as string) || (raw.gender as string) || null,
+    category: (row.category as string) || (raw.category as string) || null,
     raw_data: raw,
     created_at: (row.created_at as string) || undefined,
     updated_at: (row.updated_at as string) || undefined,
@@ -102,6 +125,8 @@ export function mapStudentToDbRow(s: Student): Record<string, unknown> {
     application_id: s.application_id.trim().toUpperCase(),
     candidate_name: s.candidate_name,
     merit_no: String(s.merit_number ?? ''),
+    original_merit_selection: s.original_merit_selection,
+    current_processing_mode: s.current_processing_mode,
     allocated_branch_id: s.allocated_branch_id || null,
     allocated_quota: s.allocated_quota || null,
     allocated_at: s.allocated_at || null,
@@ -191,6 +216,7 @@ export async function persistBranchCapacitiesToSupabase(
 
 /**
  * Authoritatively fetches student registry from Supabase public.students.
+ * Retrieves all stored records using range pagination to bypass PostgREST 1000 limit.
  */
 export async function fetchAuthoritativeStudents(): Promise<Student[]> {
   const client = getSupabase();
@@ -198,20 +224,44 @@ export async function fetchAuthoritativeStudents(): Promise<Student[]> {
     throw new Error('Supabase client is not initialized.');
   }
 
-  const { data, error } = await client
-    .from('students')
-    .select('*')
-    .order('application_id', { ascending: true });
+  const allRows: Record<string, unknown>[] = [];
+  const pageSize = 1000;
+  let page = 0;
+  let hasMore = true;
 
-  if (error) {
-    throw new Error(`Failed to fetch students from Supabase: ${error.message}`);
+  while (hasMore) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+    const { data, error } = await client
+      .from('students')
+      .select('*')
+      .order('application_id', { ascending: true })
+      .range(from, to);
+
+    if (error) {
+      throw new Error(`Failed to fetch students from Supabase: ${error.message}`);
+    }
+
+    if (!data || data.length === 0) {
+      hasMore = false;
+    } else {
+      allRows.push(...data);
+      if (data.length < pageSize) {
+        hasMore = false;
+      } else {
+        page++;
+      }
+    }
   }
 
-  if (!data || !Array.isArray(data) || data.length === 0) {
-    return [];
-  }
+  const mapped = allRows.map(mapDbRowToStudent);
+  const ilCount = mapped.filter((s) => s.current_processing_mode === 'IL').length;
+  const acapCount = mapped.filter((s) => s.current_processing_mode === 'A-CAP').length;
+  console.log(
+    `[Supabase public.students] Authoritatively fetched ${allRows.length} rows (Mapped: ${mapped.length}, IL: ${ilCount}, A-CAP: ${acapCount})`
+  );
 
-  return data.map(mapDbRowToStudent);
+  return mapped;
 }
 
 /**

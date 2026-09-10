@@ -1,5 +1,5 @@
 import React from 'react';
-import { Building2, Monitor, Shield } from 'lucide-react';
+import { Building2, Monitor, Shield, ExternalLink } from 'lucide-react';
 import { VacancySummary } from '../types';
 import { openOrFocusDisplayWindow } from '../utils/displayWindow';
 
@@ -47,19 +47,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="text-slate-500">/ {vacancySummary.initialTotalCombined}</span>
             </div>
 
-            {/* Open Display Window button */}
-            <button
-              id="nav-open-display-btn"
-              onClick={openOrFocusDisplayWindow}
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition-all shadow-xs"
-              title="Open Display Board in separate window"
-            >
-              <Monitor className="w-3.5 h-3.5" />
-              <span>🖥 Open Display</span>
-            </button>
-
             {/* Direct Route Switchers */}
-            <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
+            <div className="flex items-center bg-slate-800 p-1 rounded-lg border border-slate-700 gap-1">
               <button
                 id="nav-admin-btn"
                 onClick={() => onNavigate('admin')}
@@ -83,6 +72,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <Monitor className="w-3.5 h-3.5" />
                 <span>/display</span>
+              </button>
+              <button
+                id="nav-popout-display-btn"
+                onClick={() => openOrFocusDisplayWindow()}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold text-amber-300 hover:text-amber-200 hover:bg-slate-700/60 border border-amber-500/30 transition-all cursor-pointer"
+                title="Open Live Display Board in another window (Projector Mode)"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Pop Out Display</span>
               </button>
             </div>
           </div>

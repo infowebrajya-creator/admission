@@ -3,12 +3,12 @@ import {
   Upload,
   Download,
   RotateCcw,
+  RefreshCw,
   Info,
   Layers,
   FileSpreadsheet,
   FileText,
   ChevronDown,
-  Monitor,
 } from 'lucide-react';
 import { AdminVacancyTable } from './AdminVacancyTable';
 import { StudentSearchAndAllocate } from './StudentSearchAndAllocate';
@@ -26,7 +26,7 @@ import {
   generateIlReportPdf,
   generateCombinedReportPdf,
 } from '../services/admissionReportPdf';
-import { openOrFocusDisplayWindow, notifyDisplayRefresh } from '../utils/displayWindow';
+import { notifyDisplayRefresh } from '../utils/displayWindow';
 import { persistBranchCapacitiesToSupabase } from '../services/supabase';
 
 interface AdminDashboardProps {
@@ -58,7 +58,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isEditVacancyModalOpen, setIsEditVacancyModalOpen] = useState(false);
   const [showFormatInfo, setShowFormatInfo] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const exportDropdownRef = useRef<HTMLDivElement>(null);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await onReload();
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 300);
+    }
+  };
 
   const handleSaveCapacities = async (
     newCapacities: Record<BranchCode, { il: number; acap: number }>
@@ -127,19 +137,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </p>
         </div>
 
-        {/* Action Buttons: 1. Open Display Window, 2. Import Students, 3. Export Dropdown */}
+        {/* Action Buttons: 1. Import Students, 2. Refresh, 3. Export Dropdown */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Prominent Open Display Window Button */}
-          <button
-            id="admin-open-display-btn"
-            onClick={openOrFocusDisplayWindow}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-lg text-xs font-black shadow-xs transition-all ring-2 ring-orange-500/20"
-            title="Open Live Display Board in a separate popup window for Projector/TV"
-          >
-            <Monitor className="w-4 h-4" />
-            <span>🖥 Open Display</span>
-          </button>
-
           <button
             id="admin-import-btn"
             onClick={() => setIsImportModalOpen(true)}
@@ -147,6 +146,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <Upload className="w-4 h-4" />
             <span>Import Students</span>
+          </button>
+
+          <button
+            id="admin-refresh-btn"
+            onClick={handleManualRefresh}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold shadow-xs transition-colors"
+            title="Refetch authoritative student records from Supabase"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
+            <span>Refresh</span>
           </button>
 
           {/* Export Menu Dropdown */}

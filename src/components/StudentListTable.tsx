@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Filter, UserCheck, ArrowUpDown, ChevronRight } from 'lucide-react';
+import { Filter, UserCheck, ArrowUpDown, ChevronRight, ChevronLeft, FileCode, X } from 'lucide-react';
 import { Student } from '../types';
 
 interface StudentListTableProps {
@@ -17,20 +17,34 @@ export const StudentListTable: React.FC<StudentListTableProps> = ({
   const [tableSearch, setTableSearch] = useState('');
   const [sortField, setSortField] = useState<'merit' | 'appId' | 'name'>('merit');
   const [sortAsc, setSortAsc] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number | 'ALL'>(50);
+  const [rawViewStudent, setRawViewStudent] = useState<Student | null>(null);
+
+  // Derive counts dynamically from public.students loaded registry
+  const allCount = students.length;
+  const ilCount = useMemo(
+    () => students.filter((s) => s.current_processing_mode === 'IL').length,
+    [students]
+  );
+  const acapCount = useMemo(
+    () => students.filter((s) => s.current_processing_mode === 'A-CAP').length,
+    [students]
+  );
 
   const filteredStudents = useMemo(() => {
     let list = students;
 
-    // Filter by [ ALL ], [ IL ], [ A-CAP ]
+    // Filter by [ ALL ], [ IL ], [ A-CAP ] based on current_processing_mode
     if (filterMode === 'IL') {
-      list = list.filter((s) => s.original_merit_selection.includes('IL'));
+      list = list.filter((s) => s.current_processing_mode === 'IL');
     } else if (filterMode === 'A-CAP') {
-      list = list.filter((s) => s.original_merit_selection.includes('A-CAP'));
+      list = list.filter((s) => s.current_processing_mode === 'A-CAP');
     }
 
-    // Filter by quick search
+    // Filter by quick search: Application ID, Candidate Name, or Merit Number
     if (tableSearch.trim()) {
-      const q = tableSearch.toLowerCase().trim();
+      const q = tableSearch.toLowerCase().trim().replace(/^#/, '');
       list = list.filter(
         (s) =>
           s.application_id.toLowerCase().includes(q) ||
@@ -60,6 +74,17 @@ export const StudentListTable: React.FC<StudentListTableProps> = ({
     });
   }, [students, filterMode, tableSearch, sortField, sortAsc]);
 
+  const totalPages =
+    pageSize === 'ALL'
+      ? 1
+      : Math.max(1, Math.ceil(filteredStudents.length / (pageSize as number)));
+
+  const paginatedStudents = useMemo(() => {
+    if (pageSize === 'ALL') return filteredStudents;
+    const start = (currentPage - 1) * pageSize;
+    return filteredStudents.slice(start, start + pageSize);
+  }, [filteredStudents, currentPage, pageSize]);
+
   const handleSort = (field: 'merit' | 'appId' | 'name') => {
     if (sortField === field) {
       setSortAsc(!sortAsc);
@@ -69,6 +94,22 @@ export const StudentListTable: React.FC<StudentListTableProps> = ({
     }
   };
 
+  const handleFilterChange = (mode: 'ALL' | 'IL' | 'A-CAP') => {
+    setFilterMode(mode);
+    setCurrentPage(1);
+  };
+
+  const handleSearchChange = (val: string) => {
+    setTableSearch(val);
+    setCurrentPage(1);
+  };
+
+  const startIdx = pageSize === 'ALL' ? 0 : (currentPage - 1) * (pageSize as number);
+  const endIdx =
+    pageSize === 'ALL'
+      ? filteredStudents.length
+      : Math.min(startIdx + (pageSize as number), filteredStudents.length);
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
       {/* Header & Controls */}
@@ -76,50 +117,55 @@ export const StudentListTable: React.FC<StudentListTableProps> = ({
         <div>
           <h2 className="text-base font-bold text-slate-800 tracking-tight flex items-center gap-2">
             <span>Imported Students</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-mono">
-              {filteredStudents.length} of {students.length}
+            <span className="text-sm px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-900 font-mono font-bold">
+              {allCount}
             </span>
+            {filteredStudents.length !== allCount && (
+              <span className="text-xs text-slate-500 font-normal">
+                ({filteredStudents.length} of {allCount} filtered)
+              </span>
+            )}
           </h2>
           <p className="text-xs text-slate-500">
-            Reconciled student registry. Click any row to allocate or reassign.
+            Reconciled student registry. Click any row to allocate or view raw data.
           </p>
         </div>
 
-        {/* Filter Controls: [ ALL ] [ IL ] [ A-CAP ] */}
+        {/* Filter Controls: [ ALL (1558) ] [ IL (1558) ] [ A-CAP (0) ] */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center bg-slate-200/80 p-1 rounded-lg">
             <button
               id="filter-all-btn"
-              onClick={() => setFilterMode('ALL')}
+              onClick={() => handleFilterChange('ALL')}
               className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
                 filterMode === 'ALL'
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              ALL ({students.length})
+              ALL ({allCount})
             </button>
             <button
               id="filter-il-btn"
-              onClick={() => setFilterMode('IL')}
+              onClick={() => handleFilterChange('IL')}
               className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
                 filterMode === 'IL'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              IL ({students.filter((s) => s.original_merit_selection.includes('IL')).length})
+              IL ({ilCount})
             </button>
             <button
               id="filter-acap-btn"
-              onClick={() => setFilterMode('A-CAP')}
+              onClick={() => handleFilterChange('A-CAP')}
               className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
                 filterMode === 'A-CAP'
                   ? 'bg-purple-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              A-CAP ({students.filter((s) => s.original_merit_selection.includes('A-CAP')).length})
+              A-CAP ({acapCount})
             </button>
           </div>
 
@@ -127,7 +173,7 @@ export const StudentListTable: React.FC<StudentListTableProps> = ({
             type="text"
             placeholder="Quick filter..."
             value={tableSearch}
-            onChange={(e) => setTableSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="px-3 py-1 bg-white border border-slate-300 rounded-md text-xs text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-blue-500 w-32 sm:w-40"
           />
         </div>
@@ -168,8 +214,8 @@ export const StudentListTable: React.FC<StudentListTableProps> = ({
               </th>
               <th className="py-2.5 px-3 text-center">PCM CET %</th>
               <th className="py-2.5 px-3 text-center">JEE %</th>
-              <th className="py-2.5 px-3 text-center">Eligibility</th>
-              <th className="py-2.5 px-3 text-center">Current Branch</th>
+              <th className="py-2.5 px-3 text-center">IL / A-CAP Status</th>
+              <th className="py-2.5 px-3 text-center">Allocation</th>
               <th className="py-2.5 px-3 text-right">Action</th>
             </tr>
           </thead>
@@ -181,7 +227,14 @@ export const StudentListTable: React.FC<StudentListTableProps> = ({
                     <div>
                       <p className="font-semibold text-slate-600">No students imported yet.</p>
                       <p className="text-xs text-slate-400 mt-1">
-                        Use the "Import Students" button above to upload an Excel file or load sample data.
+                        Student records will appear once synchronized from Supabase.
+                      </p>
+                    </div>
+                  ) : filterMode === 'A-CAP' ? (
+                    <div>
+                      <p className="font-semibold text-slate-600">No A-CAP students in registry.</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        All currently stored records are IL merit list candidates. A-CAP records will appear here when an A-CAP dataset is uploaded.
                       </p>
                     </div>
                   ) : (
@@ -190,7 +243,8 @@ export const StudentListTable: React.FC<StudentListTableProps> = ({
                 </td>
               </tr>
             ) : (
-              filteredStudents.map((s, idx) => {
+              paginatedStudents.map((s, idx) => {
+                const globalIdx = startIdx + idx + 1;
                 const isSelected = selectedStudent?.application_id === s.application_id;
                 return (
                   <tr
@@ -202,7 +256,7 @@ export const StudentListTable: React.FC<StudentListTableProps> = ({
                         : 'hover:bg-slate-50'
                     }`}
                   >
-                    <td className="py-2.5 px-3 text-slate-400 font-mono">{idx + 1}</td>
+                    <td className="py-2.5 px-3 text-slate-400 font-mono">{globalIdx}</td>
                     <td className="py-2.5 px-3 font-semibold text-slate-900 font-mono">
                       #{s.merit_number}
                     </td>
@@ -220,15 +274,14 @@ export const StudentListTable: React.FC<StudentListTableProps> = ({
                     </td>
                     <td className="py-2.5 px-3 text-center">
                       <span
-                        className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold ${
-                          s.original_merit_selection === 'IL + A-CAP'
-                            ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
-                            : s.original_merit_selection === 'IL ONLY'
+                        className={`inline-block px-2.5 py-0.5 rounded text-[11px] font-bold ${
+                          s.current_processing_mode === 'IL'
                             ? 'bg-blue-100 text-blue-800 border border-blue-200'
                             : 'bg-purple-100 text-purple-800 border border-purple-200'
                         }`}
+                        title={`Original Selection: ${s.original_merit_selection}`}
                       >
-                        {s.original_merit_selection}
+                        {s.current_processing_mode}
                       </span>
                     </td>
                     <td className="py-2.5 px-3 text-center">
@@ -243,20 +296,33 @@ export const StudentListTable: React.FC<StudentListTableProps> = ({
                       )}
                     </td>
                     <td className="py-2.5 px-3 text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectStudent(s);
-                        }}
-                        className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all inline-flex items-center gap-1 ${
-                          isSelected
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-800'
-                        }`}
-                      >
-                        <span>{s.allocated_branch_id ? 'Reassign' : 'Allocate'}</span>
-                        <ChevronRight className="w-3 h-3" />
-                      </button>
+                      <div className="inline-flex items-center gap-1.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRawViewStudent(s);
+                          }}
+                          className="px-2 py-1 rounded text-[10px] font-mono text-slate-600 hover:text-blue-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+                          title="View raw_data JSON"
+                        >
+                          <FileCode className="w-3 h-3 inline mr-0.5" />
+                          <span>Raw</span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectStudent(s);
+                          }}
+                          className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all inline-flex items-center gap-1 ${
+                            isSelected
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-800'
+                          }`}
+                        >
+                          <span>{s.allocated_branch_id ? 'Reassign' : 'Allocate'}</span>
+                          <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -265,6 +331,133 @@ export const StudentListTable: React.FC<StudentListTableProps> = ({
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Footer */}
+      {filteredStudents.length > 0 && (
+        <div className="p-3 border-t border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+          <div className="flex items-center gap-2">
+            <span>
+              Showing <strong className="text-slate-800">{startIdx + 1}</strong> to{' '}
+              <strong className="text-slate-800">{endIdx}</strong> of{' '}
+              <strong className="text-slate-800">{filteredStudents.length}</strong> students
+            </span>
+            <div className="flex items-center gap-1 ml-3 border-l border-slate-200 pl-3">
+              <span className="text-[11px] text-slate-500">Per page:</span>
+              {[50, 100, 250, 'ALL'].map((size) => (
+                <button
+                  key={size}
+                  onClick={() => {
+                    setPageSize(size as number | 'ALL');
+                    setCurrentPage(1);
+                  }}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                    pageSize === size
+                      ? 'bg-slate-800 text-white font-bold'
+                      : 'text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {pageSize !== 'ALL' && totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors inline-flex items-center gap-1"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Prev</span>
+              </button>
+
+              <span className="px-2 font-mono text-slate-700 text-xs">
+                Page {currentPage} of {totalPages}
+              </span>
+
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors inline-flex items-center gap-1"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Raw Data Inspect Modal */}
+      {rawViewStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-2xl w-full p-5 space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <FileCode className="w-4 h-4 text-blue-600" />
+                  <span>Student Stored Raw Data</span>
+                  <span className="font-mono text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                    {rawViewStudent.application_id}
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Candidate: <strong>{rawViewStudent.candidate_name}</strong> • Merit #{rawViewStudent.merit_number} • {rawViewStudent.original_merit_selection}
+                </p>
+              </div>
+              <button
+                onClick={() => setRawViewStudent(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200 font-mono">
+              <div>
+                <span className="text-slate-400 block text-[10px]">Source</span>
+                <span className="font-bold text-slate-800">{String(rawViewStudent.raw_data?.source || 'IL')}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Sheet</span>
+                <span className="font-bold text-slate-800">{String(rawViewStudent.raw_data?.source_sheet || 'ILQ')}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Row</span>
+                <span className="font-bold text-slate-800">{String(rawViewStudent.raw_data?.source_row || '—')}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Sr No</span>
+                <span className="font-bold text-slate-800">{String(rawViewStudent.raw_data?.sr_no || '—')}</span>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto bg-slate-900 text-emerald-400 p-3 rounded-lg text-xs font-mono">
+              <pre>{JSON.stringify(rawViewStudent.raw_data || {}, null, 2)}</pre>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => {
+                  onSelectStudent(rawViewStudent);
+                  setRawViewStudent(null);
+                }}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs transition-colors"
+              >
+                Select for Allocation
+              </button>
+              <button
+                onClick={() => setRawViewStudent(null)}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-xs transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
