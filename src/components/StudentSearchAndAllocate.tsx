@@ -63,7 +63,27 @@ export const StudentSearchAndAllocate: React.FC<StudentSearchAndAllocateProps> =
         const matchMerit = String(s.merit_number).toLowerCase().includes(q);
         return matchAppId || matchName || matchMerit;
       })
-      .slice(0, 15);
+      .sort((a, b) => {
+        const aMeritExact = String(a.merit_number).toLowerCase() === q;
+        const bMeritExact = String(b.merit_number).toLowerCase() === q;
+        if (aMeritExact && !bMeritExact) return -1;
+        if (!aMeritExact && bMeritExact) return 1;
+
+        const aAppExact = a.application_id.toLowerCase() === q;
+        const bAppExact = b.application_id.toLowerCase() === q;
+        if (aAppExact && !bAppExact) return -1;
+        if (!aAppExact && bAppExact) return 1;
+
+        const aNameStarts = a.candidate_name.toLowerCase().startsWith(q);
+        const bNameStarts = b.candidate_name.toLowerCase().startsWith(q);
+        if (aNameStarts && !bNameStarts) return -1;
+        if (!aNameStarts && bNameStarts) return 1;
+
+        const numA = Number(a.merit_number) || 999999;
+        const numB = Number(b.merit_number) || 999999;
+        return numA - numB;
+      })
+      .slice(0, 30);
   }, [students, searchQuery]);
 
   const handleAllocate = async (isReassign = false) => {
@@ -160,7 +180,13 @@ export const StudentSearchAndAllocate: React.FC<StudentSearchAndAllocateProps> =
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Type Application ID (e.g., EN24...), Name, or Merit No..."
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchResults.length > 0) {
+                onSelectStudent(searchResults[0]);
+                setSearchQuery('');
+              }
+            }}
+            placeholder="Search by Application ID (e.g., EN26...), Candidate Name, or Merit Number..."
             className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
           />
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />

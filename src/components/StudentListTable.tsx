@@ -170,11 +170,13 @@ export const StudentListTable: React.FC<StudentListTableProps> = ({
           </div>
 
           <input
+            id="student-table-search-input"
             type="text"
-            placeholder="Quick filter..."
+            aria-label="Filter students by Application ID, Candidate Name, or Merit Number"
+            placeholder="Search App ID, Name, Merit..."
             value={tableSearch}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="px-3 py-1 bg-white border border-slate-300 rounded-md text-xs text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-blue-500 w-32 sm:w-40"
+            className="px-3 py-1 bg-white border border-slate-300 rounded-md text-xs text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-blue-500 w-36 sm:w-48"
           />
         </div>
       </div>
@@ -230,15 +232,22 @@ export const StudentListTable: React.FC<StudentListTableProps> = ({
                         Student records will appear once synchronized from Supabase.
                       </p>
                     </div>
+                  ) : filterMode === 'IL' ? (
+                    <div>
+                      <p className="font-semibold text-slate-600">No IL candidates found in registry.</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        All {allCount} registered candidates are in A-CAP mode. Click &quot;A-CAP ({acapCount})&quot; or &quot;ALL ({allCount})&quot; above to view.
+                      </p>
+                    </div>
                   ) : filterMode === 'A-CAP' ? (
                     <div>
                       <p className="font-semibold text-slate-600">No A-CAP students in registry.</p>
                       <p className="text-xs text-slate-400 mt-1">
-                        All currently stored records are IL merit list candidates. A-CAP records will appear here when an A-CAP dataset is uploaded.
+                        A-CAP records will appear here when an A-CAP dataset is synchronized.
                       </p>
                     </div>
                   ) : (
-                    <p>No students match the current filter criteria.</p>
+                    <p>No students match the current search criteria.</p>
                   )}
                 </td>
               </tr>

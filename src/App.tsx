@@ -90,6 +90,16 @@ export default function App() {
     reloadData();
   }, [reloadData]);
 
+  // Auto-retry when connection error occurs
+  useEffect(() => {
+    if (!dbError) return;
+    const retryTimer = setTimeout(() => {
+      console.info('[Supabase Sync] Auto-retrying connection after error...');
+      reloadData();
+    }, 6000);
+    return () => clearTimeout(retryTimer);
+  }, [dbError, reloadData]);
+
   // Synchronize with storage updates, messages, BroadcastChannel, and Supabase realtime
   useEffect(() => {
     const handleStorageChange = () => {

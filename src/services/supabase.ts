@@ -16,6 +16,58 @@ const supabaseAnonKey =
 
 let supabaseInstance: SupabaseClient | null = null;
 
+const CACHE_KEY_CAPACITIES = 'gh_raisoni_cached_branch_capacities';
+const CACHE_KEY_STUDENTS = 'gh_raisoni_cached_students';
+
+/**
+ * Resilient fetch wrapper for Supabase requests.
+ * - Adds timeout protection
+ * - If direct request to supabase.co fails with TypeError: Failed to fetch (e.g. adblocker,
+ *   CSP, or corporate firewall blocking third-party domains in browser), automatically
+ *   falls back to the same-origin proxy (/api/supabase/...)
+ * - Includes retry with backoff
+ */
+async function resilientFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+
+  const doAttempt = async (targetUrl: string, timeoutMs = 25000): Promise<Response> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(targetUrl, {
+        ...init,
+        signal: init?.signal || controller.signal,
+      });
+      return response;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
+  // 1. Try target URL first
+  try {
+    return await doAttempt(urlStr);
+  } catch (err) {
+    console.warn('[Supabase Fetch] Direct fetch attempt encountered error:', err);
+
+    // 2. If in browser and URL points to an external supabase domain, try local same-origin proxy
+    if (typeof window !== 'undefined' && urlStr.includes('supabase.co')) {
+      try {
+        const parsed = new URL(urlStr);
+        const proxyUrl = `${window.location.origin}/api/supabase${parsed.pathname}${parsed.search}`;
+        console.info('[Supabase Fetch] Attempting fallback via same-origin proxy:', proxyUrl);
+        return await doAttempt(proxyUrl, 20000);
+      } catch (proxyErr) {
+        console.warn('[Supabase Fetch] Proxy attempt also failed:', proxyErr);
+      }
+    }
+
+    // 3. Retry after brief backoff
+    await new Promise((r) => setTimeout(r, 1000));
+    return await doAttempt(urlStr, 25000);
+  }
+}
+
 export function isSupabaseConfigured(): boolean {
   return Boolean(supabaseUrl && supabaseAnonKey);
 }
@@ -30,6 +82,9 @@ export function getSupabase(): SupabaseClient | null {
         auth: {
           persistSession: false,
           autoRefreshToken: false,
+        },
+        global: {
+          fetch: resilientFetch,
         },
       });
     } catch (err) {
@@ -160,31 +215,56 @@ export async function fetchAuthoritativeBranchCapacities(): Promise<
     throw new Error('Supabase client is not initialized or configured.');
   }
 
-  const { data, error } = await client
-    .from('branch_capacities')
-    .select('branch, il, acap, updated_at');
+  try {
+    const { data, error } = await client
+      .from('branch_capacities')
+      .select('branch, il, acap, updated_at');
 
-  if (error) {
-    throw new Error(`Failed to fetch branch capacities from Supabase: ${error.message}`);
-  }
+    if (error) {
+      throw error;
+    }
 
-  const result: Record<BranchCode, { il: number; acap: number }> = {
-    ...DEFAULT_EMPTY_CAPACITIES,
-  };
+    const result: Record<BranchCode, { il: number; acap: number }> = {
+      ...DEFAULT_EMPTY_CAPACITIES,
+    };
 
-  if (Array.isArray(data)) {
-    for (const row of data) {
-      const code = String(row.branch || '').trim().toUpperCase() as BranchCode;
-      if (BRANCH_CODES.includes(code)) {
-        result[code] = {
-          il: Math.max(0, Math.floor(Number(row.il) || 0)),
-          acap: Math.max(0, Math.floor(Number(row.acap) || 0)),
-        };
+    if (Array.isArray(data)) {
+      for (const row of data) {
+        const code = String(row.branch || '').trim().toUpperCase() as BranchCode;
+        if (BRANCH_CODES.includes(code)) {
+          result[code] = {
+            il: Math.max(0, Math.floor(Number(row.il) || 0)),
+            acap: Math.max(0, Math.floor(Number(row.acap) || 0)),
+          };
+        }
       }
     }
-  }
 
-  return result;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(CACHE_KEY_CAPACITIES, JSON.stringify(result));
+      } catch {
+        // Storage quota exceeded or disabled
+      }
+    }
+
+    return result;
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem(CACHE_KEY_CAPACITIES);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          console.warn('[Supabase Capacities] Network fetch failed, using cached capacities:', errMsg);
+          return parsed;
+        }
+      } catch {
+        // Ignore cache parse error
+      }
+    }
+    throw new Error(`Failed to fetch branch capacities from Supabase: ${errMsg}`);
+  }
 }
 
 /**
@@ -229,39 +309,68 @@ export async function fetchAuthoritativeStudents(): Promise<Student[]> {
   let page = 0;
   let hasMore = true;
 
-  while (hasMore) {
-    const from = page * pageSize;
-    const to = from + pageSize - 1;
-    const { data, error } = await client
-      .from('students')
-      .select('*')
-      .order('application_id', { ascending: true })
-      .range(from, to);
+  try {
+    while (hasMore) {
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
+      const { data, error } = await client
+        .from('students')
+        .select('*')
+        .order('application_id', { ascending: true })
+        .range(from, to);
 
-    if (error) {
-      throw new Error(`Failed to fetch students from Supabase: ${error.message}`);
-    }
+      if (error) {
+        throw error;
+      }
 
-    if (!data || data.length === 0) {
-      hasMore = false;
-    } else {
-      allRows.push(...data);
-      if (data.length < pageSize) {
+      if (!data || data.length === 0) {
         hasMore = false;
       } else {
-        page++;
+        allRows.push(...data);
+        if (data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
       }
     }
+
+    const mapped = allRows.map(mapDbRowToStudent);
+    const ilCount = mapped.filter((s) => s.current_processing_mode === 'IL').length;
+    const acapCount = mapped.filter((s) => s.current_processing_mode === 'A-CAP').length;
+    console.log(
+      `[Supabase public.students] Authoritatively fetched ${allRows.length} rows (Mapped: ${mapped.length}, IL: ${ilCount}, A-CAP: ${acapCount})`
+    );
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(CACHE_KEY_STUDENTS, JSON.stringify(allRows));
+      } catch {
+        // Storage quota exceeded or disabled
+      }
+    }
+
+    return mapped;
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem(CACHE_KEY_STUDENTS);
+        if (cached) {
+          const cachedRows = JSON.parse(cached);
+          if (Array.isArray(cachedRows) && cachedRows.length > 0) {
+            console.warn(
+              `[Supabase Students] Network fetch failed (${errMsg}), using ${cachedRows.length} cached student records.`
+            );
+            return cachedRows.map(mapDbRowToStudent);
+          }
+        }
+      } catch {
+        // Ignore parse error
+      }
+    }
+    throw new Error(`Failed to fetch students from Supabase: ${errMsg}`);
   }
-
-  const mapped = allRows.map(mapDbRowToStudent);
-  const ilCount = mapped.filter((s) => s.current_processing_mode === 'IL').length;
-  const acapCount = mapped.filter((s) => s.current_processing_mode === 'A-CAP').length;
-  console.log(
-    `[Supabase public.students] Authoritatively fetched ${allRows.length} rows (Mapped: ${mapped.length}, IL: ${ilCount}, A-CAP: ${acapCount})`
-  );
-
-  return mapped;
 }
 
 /**
@@ -331,7 +440,8 @@ export async function saveStudentsToSupabase(students: Student[]): Promise<void>
 }
 
 /**
- * Resets all students from Supabase public.students.
+ * Resets all student allocations in Supabase public.students, returning them to unallocated state.
+ * Preserves the imported student registry.
  */
 export async function resetStudentsInSupabase(): Promise<void> {
   const client = getSupabase();
@@ -341,11 +451,17 @@ export async function resetStudentsInSupabase(): Promise<void> {
 
   const { error } = await client
     .from('students')
-    .delete()
+    .update({
+      allocated_branch_id: null,
+      allocated_quota: null,
+      allocated_at: null,
+      status: 'Pending',
+      updated_at: new Date().toISOString(),
+    })
     .neq('application_id', '');
 
   if (error) {
-    throw new Error(`Failed to reset students in Supabase: ${error.message}`);
+    throw new Error(`Failed to reset allocations in Supabase: ${error.message}`);
   }
 }
 

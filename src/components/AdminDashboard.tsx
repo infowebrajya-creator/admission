@@ -25,7 +25,9 @@ import {
   generateAcapReportPdf,
   generateIlReportPdf,
   generateCombinedReportPdf,
+  generateAllottedStudentsReportPdf,
 } from '../services/admissionReportPdf';
+import { generateAllottedStudentsExcelReport } from '../services/allottedStudentsExcel';
 import { notifyDisplayRefresh } from '../utils/displayWindow';
 import { persistBranchCapacitiesToSupabase } from '../services/supabase';
 
@@ -59,6 +61,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [showFormatInfo, setShowFormatInfo] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isExportingAllotted, setIsExportingAllotted] = useState(false);
+  const [isExportingAllottedExcel, setIsExportingAllottedExcel] = useState(false);
   const exportDropdownRef = useRef<HTMLDivElement>(null);
 
   const handleManualRefresh = async () => {
@@ -112,10 +116,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setIsExportMenuOpen(false);
   };
 
+  const handleExportAllottedPdf = async () => {
+    setIsExportingAllotted(true);
+    try {
+      await generateAllottedStudentsReportPdf(students);
+    } catch (err) {
+      console.error('Failed to generate Allotted Students Report PDF:', err);
+    } finally {
+      setIsExportingAllotted(false);
+      setIsExportMenuOpen(false);
+    }
+  };
+
+  const handleExportAllottedExcel = async () => {
+    setIsExportingAllottedExcel(true);
+    try {
+      await generateAllottedStudentsExcelReport(students);
+    } catch (err) {
+      console.error('Failed to generate Allotted Students Report Excel:', err);
+    } finally {
+      setIsExportingAllottedExcel(false);
+      setIsExportMenuOpen(false);
+    }
+  };
+
   const handleResetData = async () => {
     if (
       confirm(
-        'Are you sure you want to reset all student data and allocations in Supabase? Vacancies will return to total capacity.'
+        'Are you sure you want to reset all student allocations in Supabase? All students will return to unallocated status and vacancies will return to full capacity.'
       )
     ) {
       await resetAllAdmissionData();
@@ -223,6 +251,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div className="text-[11px] text-slate-400">Both A-CAP & IL with page breaks</div>
                   </div>
                 </button>
+
+                <button
+                  id="export-option-allotted-pdf"
+                  onClick={handleExportAllottedPdf}
+                  disabled={isExportingAllotted}
+                  className="w-full text-left px-3 py-2.5 hover:bg-slate-50 flex items-center gap-2.5 text-slate-700 border-t border-slate-100 transition-colors disabled:opacity-50"
+                >
+                  <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-slate-900 flex items-center justify-between">
+                      <span>5. Allotted Students Report PDF</span>
+                      {isExportingAllotted && (
+                        <RefreshCw className="w-3 h-3 animate-spin text-emerald-600 ml-1 shrink-0" />
+                      )}
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      Official datewise report of allotted students
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  id="export-option-allotted-excel"
+                  onClick={handleExportAllottedExcel}
+                  disabled={isExportingAllottedExcel}
+                  className="w-full text-left px-3 py-2.5 hover:bg-slate-50 flex items-center gap-2.5 text-slate-700 border-t border-slate-100 transition-colors disabled:opacity-50"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-slate-900 flex items-center justify-between">
+                      <span>6. Allotted Students Report Excel</span>
+                      {isExportingAllottedExcel && (
+                        <RefreshCw className="w-3 h-3 animate-spin text-emerald-600 ml-1 shrink-0" />
+                      )}
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      Official institutional Excel (.xlsx) report
+                    </div>
+                  </div>
+                </button>
               </div>
             )}
           </div>
@@ -240,7 +308,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <button
               onClick={handleResetData}
               className="inline-flex items-center gap-1 px-2.5 py-2 text-slate-400 hover:text-red-600 rounded-lg text-xs transition-colors"
-              title="Reset all student data"
+              title="Reset all student allocations"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
