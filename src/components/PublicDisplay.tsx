@@ -40,8 +40,8 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({
   onNavigate,
   currentRoute = 'display',
 }) => {
-  // Default selection is A-CAP as requested
-  const [activeTab, setActiveTab] = useState<'IL' | 'A-CAP' | 'COMBINED'>('A-CAP');
+  // Default selection is IL
+  const [activeTab, setActiveTab] = useState<'IL' | 'A-CAP' | 'COMBINED'>('IL');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(!summary?.branches);
   const [dbError, setDbError] = useState<string | null>(null);
@@ -365,7 +365,7 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({
             <button
               id="display-tab-acap"
               onClick={() => setActiveTab('A-CAP')}
-              className={`px-4 sm:px-5 py-1 rounded-lg font-black text-xs tracking-wider uppercase transition-all ${
+              className={`hidden px-4 sm:px-5 py-1 rounded-lg font-black text-xs tracking-wider uppercase transition-all ${
                 activeTab === 'A-CAP'
                   ? 'bg-orange-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -387,12 +387,12 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({
           </div>
         </div>
 
-        {/* 3. Three Compact Horizontal Summary Cards (Always visible, prominent) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
+        {/* 3. Three Compact Horizontal Summary Cards (Hidden per request) */}
+        <div className="hidden grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
           {/* Card 1: TOTAL APPROVED VACANCY */}
           <div
             id="display-card-total-vacancy"
-            className="bg-white rounded-xl border border-slate-200/90 p-3 sm:px-4 sm:py-3 shadow-xs flex items-center justify-between border-l-4 border-l-slate-700 shrink-0 transition-all"
+            className="hidden bg-white rounded-xl border border-slate-200/90 p-3 sm:px-4 sm:py-3 shadow-xs items-center justify-between border-l-4 border-l-slate-700 shrink-0 transition-all"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center shrink-0 border border-slate-200">
@@ -415,7 +415,7 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({
           {/* Card 2: FILLED SEATS */}
           <div
             id="display-card-filled-seats"
-            className="bg-white rounded-xl border border-blue-100 p-3 sm:px-4 sm:py-3 shadow-xs flex items-center justify-between border-l-4 border-l-blue-600 shrink-0 transition-all"
+            className="hidden bg-white rounded-xl border border-blue-100 p-3 sm:px-4 sm:py-3 shadow-xs items-center justify-between border-l-4 border-l-blue-600 shrink-0 transition-all"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200">
@@ -438,7 +438,7 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({
           {/* Card 3: AVAILABLE SEATS */}
           <div
             id="display-card-available-seats"
-            className="bg-white rounded-xl border border-emerald-200 p-3 sm:px-4 sm:py-3 shadow-xs flex items-center justify-between border-l-4 border-l-emerald-500 ring-1 ring-emerald-500/10 shrink-0 transition-all"
+            className="hidden bg-white rounded-xl border border-emerald-200 p-3 sm:px-4 sm:py-3 shadow-xs items-center justify-between border-l-4 border-l-emerald-500 ring-1 ring-emerald-500/10 shrink-0 transition-all"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200">
