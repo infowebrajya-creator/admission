@@ -42,8 +42,8 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({
   onNavigate,
   currentRoute = 'display',
 }) => {
-  // Default selection is A-CAP
-  const [activeTab, setActiveTab] = useState<'A-CAP' | 'COMBINED'>('A-CAP');
+  // Default selection is A-CAP, with IL and COMBINED options available
+  const [activeTab, setActiveTab] = useState<'IL' | 'A-CAP' | 'COMBINED'>('A-CAP');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(!summary?.branches);
   const [dbError, setDbError] = useState<string | null>(null);
@@ -359,6 +359,17 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({
 
           {/* Filter Tabs: Compact in top-right of content area */}
           <div className="inline-flex bg-white p-1 rounded-xl border border-slate-300 shadow-2xs gap-1">
+            <button
+              id="display-tab-il"
+              onClick={() => setActiveTab('IL')}
+              className={`px-4 sm:px-5 py-1 rounded-lg font-black text-xs tracking-wider uppercase transition-all ${
+                activeTab === 'IL'
+                  ? 'bg-orange-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              IL
+            </button>
             <button
               id="display-tab-acap"
               onClick={() => setActiveTab('A-CAP')}
